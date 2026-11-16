@@ -358,6 +358,8 @@ static StopReason Execute(CpuState *s, Memory *mem, uint32_t op) {
 					(value & (0x00ffffffu >> (24 - shift))));
 			return StopReason::kRunning;
 		}
+		case 0x2F:  // cache: no guest instruction cache to maintain on the host
+			return StopReason::kRunning;
 		case 0x12: {  // COP2 transfers between GPRs and VFPU data/control registers
 			uint32_t sub = Rs(op);
 			if (sub == 8) {  // bvf/bvt/bvfl/bvtl
