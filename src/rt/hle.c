@@ -968,6 +968,27 @@ static uint32_t h_AtracDecodeData(CpuState *s) {
         a->primeFrames--;
     }
     const uint8_t *frame = atrac_frame_data(a);
+    if (!frame && a->loopNum != 0 && a->loopStart >= 0) {
+        /* The RIFF header's end sample can sit past the last decodable frame, so the stream
+         * runs out of data before posSample reaches endSample and the loop path above never
+         * runs. Wrap at the data end instead, the way the decoder does for a looped stream. */
+        uint32_t loop_result = atrac_prepare_decoder(a, a->loopStart);
+        if (loop_result) return loop_result;
+        if (a->loopNum > 0) a->loopNum--;
+        while (a->primeFrames > 0) {
+            const uint8_t *prime = atrac_frame_data(a);
+            int primed_samples = 0;
+            int primed;
+            if (!prime) { a->internalError = 0x80630023u; return 0x80630023u; }
+            primed = sr_atrac_decoder_decode(
+                a->decoder, prime, a->blockAlign, s_atrac_decode, 2,
+                ATRAC_SAMPLES_PER_FRAME, &primed_samples);
+            if (primed < 0) { a->internalError = (uint32_t)primed; return 0x80630024u; }
+            atrac_consume_frame(a);
+            a->primeFrames--;
+        }
+        frame = atrac_frame_data(a);
+    }
     if (!frame) {
         a->internalError = 0x80630023u;
         return 0x80630023u;
